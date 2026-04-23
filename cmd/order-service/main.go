@@ -13,9 +13,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
@@ -69,8 +70,8 @@ type Product struct {
 }
 
 type CreateOrderRequest struct {
-	ProductID string `json:"product_id"`
-	Quantity  int    `json:"quantity"`
+	ProductID string `json:"product_id" binding:"required"`
+	Quantity  int    `json:"quantity" binding:"required,gt=0"`
 }
 
 // In-memory order store
@@ -107,21 +108,22 @@ func main() {
 		productServiceURL = "http://localhost:8082"
 	}
 
-	// Setup HTTP routes
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", handleHealth(logger))
-	mux.HandleFunc("POST /orders", handleCreateOrder(logger, productServiceURL))
-	mux.HandleFunc("GET /orders", handleListOrders(logger))
-	mux.Handle("GET /metrics", promhttp.Handler())
+	// Setup Gin router
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	router.Use(gin.Recovery())
+	router.Use(otelgin.Middleware("order-service"))
+	router.Use(telemetry.GinMetricsMiddleware(logger, httpRequestsTotal, httpRequestDuration))
 
-	// Middleware chain: OTel tracing → Prometheus metrics + logging → handlers
-	var handler http.Handler = mux
-	handler = telemetry.InstrumentHandler(handler, logger, httpRequestsTotal, httpRequestDuration)
-	handler = otelhttp.NewHandler(handler, "order-service")
+	// Routes
+	router.GET("/health", handleHealth)
+	router.POST("/orders", handleCreateOrder(logger, productServiceURL))
+	router.GET("/orders", handleListOrders(logger))
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	server := &http.Server{
 		Addr:    ":8081",
-		Handler: handler,
+		Handler: router,
 	}
 
 	// Start server
@@ -143,45 +145,27 @@ func main() {
 	server.Shutdown(shutdownCtx)
 }
 
-func handleHealth(logger *zap.Logger) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":  "ok",
-			"service": "order-service",
-		})
-	}
+func handleHealth(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"service": "order-service",
+	})
 }
 
-func handleCreateOrder(logger *zap.Logger, productServiceURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+func handleCreateOrder(logger *zap.Logger, productServiceURL string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx := c.Request.Context()
 		span := trace.SpanFromContext(ctx)
 		traceID := span.SpanContext().TraceID().String()
 
-		// Parse request body
+		// Parse and validate request body using Gin binding
 		var req CreateOrderRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := c.ShouldBindJSON(&req); err != nil {
 			logger.Error("invalid request body",
 				zap.Error(err),
 				zap.String("trace_id", traceID),
 			)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "invalid request body"})
-			return
-		}
-
-		// Validate input
-		if req.ProductID == "" || req.Quantity <= 0 {
-			logger.Warn("invalid order parameters",
-				zap.String("product_id", req.ProductID),
-				zap.Int("quantity", req.Quantity),
-				zap.String("trace_id", traceID),
-			)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "product_id and positive quantity required"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -198,9 +182,7 @@ func handleCreateOrder(logger *zap.Logger, productServiceURL string) http.Handle
 				zap.String("product_id", req.ProductID),
 				zap.String("trace_id", traceID),
 			)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to get product: %s", err.Error())})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get product: %s", err.Error())})
 			return
 		}
 
@@ -235,15 +217,13 @@ func handleCreateOrder(logger *zap.Logger, productServiceURL string) http.Handle
 			zap.String("trace_id", traceID),
 		)
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(order)
+		c.JSON(http.StatusCreated, order)
 	}
 }
 
-func handleListOrders(logger *zap.Logger) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		span := trace.SpanFromContext(r.Context())
+func handleListOrders(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		span := trace.SpanFromContext(c.Request.Context())
 		traceID := span.SpanContext().TraceID().String()
 
 		ordersMu.RLock()
@@ -258,8 +238,7 @@ func handleListOrders(logger *zap.Logger) http.HandlerFunc {
 			zap.String("trace_id", traceID),
 		)
 
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
+		c.JSON(http.StatusOK, result)
 	}
 }
 
