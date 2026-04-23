@@ -1,6 +1,6 @@
 # 🔭 Observability Demo
 
-Hệ thống demo đầy đủ 3 trụ cột Observability: **Logging**, **Metrics**, **Tracing** với Grafana visualization.
+A comprehensive Observability demo system featuring the three pillars: **Logging**, **Metrics**, and **Tracing** with unified visualization in Grafana.
 
 ## 🏗 Architecture
 
@@ -39,13 +39,13 @@ Hệ thống demo đầy đủ 3 trụ cột Observability: **Logging**, **Metri
 
 ## 🚀 Quick Start
 
-### 1. Khởi động toàn bộ stack
+### 1. Start the entire stack
 
 ```bash
 docker compose up -d --build
 ```
 
-### 2. Kiểm tra services
+### 2. Verify Services
 
 ```bash
 # Health checks
@@ -64,41 +64,41 @@ curl -X POST http://localhost:8081/orders \
 curl http://localhost:8081/orders
 ```
 
-### 3. Generate traffic cho demo
+### 3. Generate Traffic for Demo
 
 ```bash
 chmod +x scripts/generate-traffic.sh
 ./scripts/generate-traffic.sh 20
 ```
 
-### 4. Mở Grafana
+### 4. Access Grafana
 
 - URL: [http://localhost:3000](http://localhost:3000)
 - Username: `admin`
 - Password: `admin`
 
-## 📊 Xem data trong Grafana
+## 📊 Viewing Data in Grafana
 
 ### Dashboard
-Truy cập dashboard đã được provision sẵn:
+Access the pre-provisioned dashboard:
 - **Observability Demo - Services Overview**: [http://localhost:3000/d/services-overview](http://localhost:3000/d/services-overview)
 
 ### Explore - Logs (Loki)
-1. Vào **Explore** → chọn datasource **Loki**
+1. Go to **Explore** → select **Loki** datasource.
 2. Query: `{service="order-service"}`
-3. Thấy structured JSON logs với `trace_id` → click vào `TraceID` để jump sang Tempo
+3. You will see structured JSON logs with a `trace_id` → click on the `TraceID` label to jump directly to Tempo.
 
 ### Explore - Metrics (Prometheus)
-1. Vào **Explore** → chọn datasource **Prometheus**
-2. Một số queries hữu ích:
+1. Go to **Explore** → select **Prometheus** datasource.
+2. Useful queries:
    - `rate(order_http_requests_total[1m])` - Request rate
    - `histogram_quantile(0.95, rate(order_http_request_duration_seconds_bucket[5m]))` - P95 latency
-   - `orders_created_total` - Total orders
+   - `orders_created_total` - Total orders counter
 
 ### Explore - Traces (Tempo)
-1. Vào **Explore** → chọn datasource **Tempo**
-2. Search traces → thấy distributed traces qua cả 2 services
-3. Click vào trace → thấy waterfall view với spans từ order-service → product-service
+1. Go to **Explore** → select **Tempo** datasource.
+2. Search for traces → view distributed traces spanning across both services.
+3. Click on a trace → waterfall view showing spans from order-service to product-service.
 
 ## 🔄 Correlation Flow
 
@@ -106,47 +106,47 @@ Truy cập dashboard đã được provision sẵn:
 Log (Loki) → trace_id → Trace (Tempo) → service name → Metrics (Prometheus)
 ```
 
-- **Log → Trace**: Click vào `TraceID` derived field trong Loki logs
-- **Trace → Log**: Từ trace detail, click "Logs for this span" để xem logs liên quan
-- **Trace → Metrics**: Từ trace detail, xem metrics liên quan
+- **Log → Trace**: Click on the `TraceID` derived field in Loki logs.
+- **Trace → Log**: From the trace detail view, click "Logs for this span" to see related entries.
+- **Trace → Metrics**: From the trace detail view, view related metrics for the service.
 
 ## 📁 Project Structure
 
 ```
 demo/
 ├── cmd/
-│   ├── order-service/main.go     # Order API + calls product-service
+│   ├── order-service/main.go     # Order API calling product-service
 │   └── product-service/main.go   # Product catalog API
 ├── pkg/
 │   └── telemetry/
-│       ├── telemetry.go          # OTel tracer + Zap logger init
-│       └── middleware.go         # Prometheus metrics + logging middleware
+│       ├── telemetry.go          # OTel tracer & Zap logger initialization
+│       └── middleware.go         # Prometheus metrics & logging middleware
 ├── configs/
-│   ├── prometheus.yml            # Scrape config
-│   ├── loki.yml                  # Loki storage config
-│   ├── promtail.yml              # Docker log collection
-│   ├── tempo.yml                 # Trace storage config
-│   ├── otel-collector.yml        # OTLP receiver → Tempo exporter
+│   ├── prometheus.yml            # Scrape configuration
+│   ├── loki.yml                  # Loki storage configuration
+│   ├── promtail.yml              # Docker log collection configuration
+│   ├── tempo.yml                 # Trace storage configuration
+│   ├── otel-collector.yml        # OTLP receiver to Tempo exporter
 │   └── grafana/
-│       ├── datasources.yml       # Auto-provision datasources
-│       ├── dashboards.yml        # Dashboard provisioning
+│       ├── datasources.yml       # Auto-provisioned datasources
+│       ├── dashboards.yml        # Dashboard provisioning configuration
 │       └── dashboards/
-│           └── overview.json     # Services overview dashboard
+│           └── overview.json     # Services overview dashboard definition
 ├── scripts/
-│   └── generate-traffic.sh       # Traffic generator for demo
-├── docker-compose.yml            # All 8 services
-├── Dockerfile                    # Multi-stage Go build
+│   └── generate-traffic.sh       # Traffic generator script
+├── docker-compose.yml            # Full stack orchestration (8 services)
+├── Dockerfile                    # Multi-stage Go build (Go 1.25.5)
 ├── go.mod
 └── README.md
 ```
 
-## 🛑 Dừng stack
+## 🛑 Stop the Stack
 
 ```bash
 docker compose down
 ```
 
-Xoá cả data:
+To remove all data volumes as well:
 ```bash
 docker compose down -v
 ```

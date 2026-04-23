@@ -62,7 +62,7 @@ for i in $(seq 1 "$ITERATIONS"); do
         echo "❌ Failed (HTTP $http_code)"
     fi
 
-    # Random delay between requests (0.5-2 seconds)
+    # Random delay between requests (0.2-1 seconds)
     sleep_time=$(echo "scale=1; ($RANDOM % 15 + 5) / 10" | bc)
     sleep "$sleep_time"
 done
