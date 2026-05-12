@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ Kafka Event Streaming & Consumer Group Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0c10;
+            --panel-bg: rgba(22, 28, 45, 0.45);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            
+            --kafka-purple: #8b5cf6;
+            --producer-blue: #3b82f6;
+            --consumer-green: #10b981;
+            --warning-amber: #f59e0b;
+            --danger-rose: #f43f5e;
+            
+            --glow-purple: rgba(139, 92, 246, 0.35);
+            --glow-blue: rgba(59, 130, 246, 0.35);
+            --glow-green: rgba(16, 185, 129, 0.35);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.1) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%),
+                linear-gradient(rgba(255, 255, 255, 0.004) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.004) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Header */
+        header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--panel-border);
+            backdrop-filter: blur(12px);
+            background: rgba(11, 12, 16, 0.7);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-icon {
+            color: var(--kafka-purple);
+            filter: drop-shadow(0 0 8px var(--glow-purple));
+            font-size: 1.8rem;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.5rem 1rem;
+            border-radius: 99px;
+            border: 1px solid var(--panel-border);
+            font-size: 0.85rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--consumer-green);
+            box-shadow: 0 0 8px var(--consumer-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* Main Container */
+        .dashboard-container {
+            flex: 1;
+            padding: 2rem;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Stats Row */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(8px);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .stat-card.producer::before { background: var(--producer-blue); }
+        .stat-card.consumer::before { background: var(--consumer-green); }
+        .stat-card.broker::before { background: var(--warning-amber); }
+        .stat-card.rebalance::before { background: var(--kafka-purple); }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .stat-card.danger-pulse {
+            border-color: var(--danger-rose);
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.2);
+            animation: dangerGlow 1.5s infinite alternate;
+        }
+
+        @keyframes dangerGlow {
+            from { box-shadow: 0 0 5px rgba(244, 63, 94, 0.1); }
+            to { box-shadow: 0 0 20px rgba(244, 63, 94, 0.35); }
+        }
+
+        /* Core Demo Grid */
+        .demo-architecture-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 2.5rem;
+            position: relative;
+            min-height: 500px;
+        }
+
+        @media (max-width: 1100px) {
+            .demo-architecture-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+        }
+
+        /* Section Panel */
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+            position: relative;
+            z-index: 10;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.75rem;
+        }
+
+        .panel-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .panel-badge {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 99px;
+            font-weight: 600;
+        }
+
+        /* Column 1: Producer */
+        .producer-panel {
+            border-top: 3px solid var(--producer-blue);
+        }
+        .producer-panel .panel-badge {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--producer-blue);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        input, select, textarea {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 0.75rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--producer-blue);
+            box-shadow: 0 0 8px var(--glow-blue);
+        }
+
+        textarea {
+            font-family: 'JetBrains Mono', monospace;
+            resize: none;
+            height: 110px;
+        }
+
+        .presets-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+
+        .preset-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 0.4rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .preset-btn:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--producer-blue);
+            color: var(--text-primary);
+        }
+
+        .dispatch-btn {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            border: none;
+            border-radius: 8px;
+            padding: 0.9rem;
+            color: white;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            transition: all 0.2s;
+        }
+
+        .dispatch-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(37, 99, 235, 0.5), 0 0 10px var(--producer-blue);
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+
+        .dispatch-btn:active {
+            transform: translateY(1px);
+        }
+
+        /* Column 2: Kafka Topic Broker */
+        .broker-panel {
+            border-top: 3px solid var(--kafka-purple);
+        }
+        .broker-panel .panel-badge {
+            background: rgba(139, 92, 246, 0.1);
+            color: var(--kafka-purple);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .partitions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            flex: 1;
+        }
+
+        .partition-card {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .partition-card.active {
+            border-color: var(--kafka-purple);
+            box-shadow: 0 0 12px rgba(139, 92, 246, 0.15);
+        }
+
+        .partition-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .partition-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--kafka-purple);
+        }
+
+        .partition-offset {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .message-pill {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 2px solid var(--warning-amber);
+            padding: 0.4rem 0.5rem;
+            border-radius: 0 4px 4px 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Column 3: Consumer Group */
+        .consumer-panel {
+            border-top: 3px solid var(--consumer-green);
+        }
+        .consumer-panel .panel-badge {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--consumer-green);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .consumers-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .consumer-card {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            transition: all 0.3s;
+        }
+
+        .consumer-card.active {
+            border-color: var(--consumer-green);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+        }
+
+        .consumer-card.inactive {
+            opacity: 0.5;
+        }
+
+        .consumer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .consumer-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        /* Custom Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 42px;
+            height: 22px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #334155;
+            transition: .3s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--consumer-green);
+        }
+
+        input:focus + .slider {
+            box-shadow: 0 0 1px var(--consumer-green);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        .consumer-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .consumer-meta span strong {
+            color: var(--text-primary);
+        }
+
+        .consumer-msg {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 6px;
+            padding: 0.4rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            border-left: 2px solid var(--consumer-green);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .consumer-assignments {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+        }
+
+        .assignment-badge {
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #c084fc;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        /* Processing delay panel inside consumers */
+        .delay-control {
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .delay-value {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--warning-amber);
+            font-weight: 500;
+        }
+
+        /* SVG Connections Layout */
+        #svg-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .connection-line {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.05);
+            stroke-width: 2;
+            transition: stroke 0.3s, stroke-width 0.3s;
+        }
+
+        .connection-line.active-group {
+            stroke: rgba(139, 92, 246, 0.15);
+            stroke-dasharray: 4 4;
+            animation: dash 10s linear infinite;
+        }
+
+        .connection-line.active-route {
+            stroke: var(--consumer-green);
+            stroke-opacity: 0.3;
+            stroke-width: 2.5;
+        }
+
+        @keyframes dash {
+            to { stroke-dashoffset: -100; }
+        }
+
+        .glow-dot {
+            fill: var(--producer-blue);
+            filter: drop-shadow(0 0 6px var(--producer-blue));
+        }
+
+        .glow-dot.worker-glow {
+            fill: var(--consumer-green);
+            filter: drop-shadow(0 0 6px var(--consumer-green));
+        }
+
+        /* Logs Console */
+        .console-panel {
+            flex: 1;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+            background: #07080a;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+            overflow: hidden;
+        }
+
+        .console-header {
+            background: rgba(255, 255, 255, 0.02);
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .console-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .console-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--warning-amber);
+            border-radius: 50%;
+        }
+
+        .console-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .filter-chip {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-chip.active {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: var(--kafka-purple);
+            color: var(--text-primary);
+        }
+
+        .console-btn {
+            background: transparent;
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 0.3rem 0.7rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .console-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+
+        .console-body {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            max-height: 350px;
+        }
+
+        .log-line {
+            display: flex;
+            gap: 0.75rem;
+            word-break: break-all;
+            animation: fadeInLog 0.15s ease-out;
+        }
+
+        @keyframes fadeInLog {
+            from { opacity: 0; transform: translateY(2px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .log-time {
+            color: #64748b;
+            flex-shrink: 0;
+            user-select: none;
+        }
+
+        .log-src {
+            font-weight: 600;
+            flex-shrink: 0;
+            width: 90px;
+            user-select: none;
+        }
+
+        .log-msg {
+            color: #e2e8f0;
+        }
+
+        /* Source Colors */
+        .src-system { color: #c084fc; }
+        .src-producer { color: #60a5fa; }
+        .src-worker-1 { color: #34d399; }
+        .src-worker-2 { color: #2dd4bf; }
+        .src-worker-3 { color: #a3e635; }
+        
+        .log-level-ERROR {
+            background: rgba(244, 63, 94, 0.15);
+            border-radius: 3px;
+            padding: 0 0.2rem;
+        }
+        .log-level-ERROR .log-msg {
+            color: #fda4af !important;
+        }
+
+        /* Info boxes */
+        .info-panel {
+            background: rgba(30, 41, 59, 0.2);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .info-panel {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .info-box h3 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: var(--warning-amber);
+        }
+
+        .info-box p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .info-box ul {
+            list-style-type: none;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            padding-left: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            margin-top: 0.5rem;
+        }
+
+        .info-box li::before {
+            content: "•";
+            color: var(--kafka-purple);
+            font-weight: bold;
+            display: inline-block;
+            width: 1em;
+            margin-left: -1em;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-title">
+            <span class="logo-icon">⚡</span>
+            <div>
+                <h1>Kafka Event Streaming Console</h1>
+                <p style="font-size: 0.75rem; color: var(--text-secondary);">Distributed Message Queue & Consumer Groups Demo</p>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <a href="http://localhost:8085" target="_blank" class="console-btn" style="border-color: var(--kafka-purple); color: #c084fc; padding: 0.5rem 1rem; border-radius: 99px; text-decoration: none; font-weight: 600; font-size: 0.8rem; display: flex; align-items: center; gap: 0.4rem; box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);">
+                🔎 Open Kafka UI (Tracing)
+            </a>
+            <div class="connection-status">
+                <span class="status-dot"></span>
+                <span id="broker-address">Connecting to Broker...</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="dashboard-container">
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card producer">
+                <span class="stat-label">Total Produced</span>
+                <span id="stat-produced" class="stat-value">0</span>
+            </div>
+            <div class="stat-card consumer">
+                <span class="stat-label">Total Consumed</span>
+                <span id="stat-consumed" class="stat-value">0</span>
+            </div>
+            <div class="stat-card broker" id="lag-card">
+                <span class="stat-label">Active Group Lag</span>
+                <span id="stat-lag" class="stat-value" style="color: var(--warning-amber);">0</span>
+            </div>
+            <div class="stat-card rebalance">
+                <span class="stat-label">Group Rebalances</span>
+                <span id="stat-rebalances" class="stat-value">0</span>
+            </div>
+        </div>
+
+        <!-- Interactive Architecture Section -->
+        <div style="position: relative;">
+            <!-- Connector Lines Layer -->
+            <svg id="svg-container">
+                <!-- Connections from Producer to Partitions -->
+                <path id="path-prod-p0" class="connection-line" />
+                <path id="path-prod-p1" class="connection-line" />
+                <path id="path-prod-p2" class="connection-line" />
+
+                <!-- Connections from Partitions to Consumer Group -->
+                <path id="path-p0-w" class="connection-line active-group" />
+                <path id="path-p1-w" class="connection-line active-group" />
+                <path id="path-p2-w" class="connection-line active-group" />
+            </svg>
+
+            <div class="demo-architecture-grid">
+                <!-- PANEL 1: PRODUCER HUB -->
+                <div id="producer-hub-el" class="panel producer-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">📤 Event Producer</div>
+                        <span class="panel-badge">Active</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="partition-strategy">Partitioning Strategy</label>
+                        <select id="partition-strategy">
+                            <option value="key">Hash-Key Partitioning (Key-based)</option>
+                            <option value="round-robin">Round-Robin Partitioning (No key)</option>
+                            <option value="partition">Direct Partition Targeting</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="partition-select-group" style="display: none;">
+                        <label for="direct-partition">Target Partition</label>
+                        <select id="direct-partition">
+                            <option value="0">Partition 0</option>
+                            <option value="1">Partition 1</option>
+                            <option value="2">Partition 2</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="message-key">Message Key (Kafka Partitioning Key)</label>
+                        <input type="text" id="message-key" placeholder="e.g. order-user-8712" value="order-usr-283">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Payload Templates</label>
+                        <div class="presets-grid">
+                            <div class="preset-btn" onclick="applyPreset('order')">📦 Order</div>
+                            <div class="preset-btn" onclick="applyPreset('pay')">💳 Payment</div>
+                            <div class="preset-btn" onclick="applyPreset('user')">👤 User Log</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="message-payload">JSON Message Payload</label>
+                        <textarea id="message-payload" placeholder="Enter JSON payload"></textarea>
+                    </div>
+
+                    <button class="dispatch-btn" onclick="publishMessage()">
+                        <span>⚡</span> Dispatch Event to Kafka
+                    </button>
+                </div>
+
+                <!-- PANEL 2: KAFKA TOPIC (PARTITIONS) -->
+                <div id="kafka-topic-el" class="panel broker-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">🟣 Kafka Topic: <code style="color: #a78bfa; margin-left: 0.3rem;">ecommerce-events</code></div>
+                        <span class="panel-badge" style="background: rgba(139, 92, 246, 0.1); color: var(--kafka-purple);">Topic Broker</span>
+                    </div>
+
+                    <div class="partitions-list">
+                        <!-- Partition 0 -->
+                        <div id="partition-card-0" class="partition-card">
+                            <div class="partition-header">
+                                <span class="partition-name">Partition #0</span>
+                                <span class="partition-offset" id="offset-p0">Offset: 0</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Last messages:</div>
+                            <div id="msgs-p0" style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                <div class="message-pill" style="border-color: #64748b; color: #64748b; font-style: italic;">No events yet</div>
+                            </div>
+                        </div>
+
+                        <!-- Partition 1 -->
+                        <div id="partition-card-1" class="partition-card">
+                            <div class="partition-header">
+                                <span class="partition-name">Partition #1</span>
+                                <span class="partition-offset" id="offset-p1">Offset: 0</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Last messages:</div>
+                            <div id="msgs-p1" style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                <div class="message-pill" style="border-color: #64748b; color: #64748b; font-style: italic;">No events yet</div>
+                            </div>
+                        </div>
+
+                        <!-- Partition 2 -->
+                        <div id="partition-card-2" class="partition-card">
+                            <div class="partition-header">
+                                <span class="partition-name">Partition #2</span>
+                                <span class="partition-offset" id="offset-p2">Offset: 0</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Last messages:</div>
+                            <div id="msgs-p2" style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                <div class="message-pill" style="border-color: #64748b; color: #64748b; font-style: italic;">No events yet</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL 3: CONSUMER GROUP -->
+                <div id="consumer-group-el" class="panel consumer-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">📥 Group: <code style="color: #34d399; margin-left: 0.3rem;">order-processing-group</code></div>
+                        <span class="panel-badge" style="background: rgba(16, 185, 129, 0.1); color: var(--consumer-green);">Consumer Group</span>
+                    </div>
+
+                    <div class="consumers-list">
+                        <!-- Worker 1 -->
+                        <div id="worker-card-worker-1" class="consumer-card active">
+                            <div class="consumer-header">
+                                <span class="consumer-name">
+                                    <span class="status-dot"></span> Worker-1
+                                </span>
+                                <label class="switch">
+                                    <input type="checkbox" id="toggle-worker-1" checked onchange="toggleWorker('worker-1')">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="consumer-meta">
+                                <span>Status: <strong class="worker-status" id="status-worker-1" style="color: var(--consumer-green)">RUNNING</strong></span>
+                                <span>Processed: <strong id="count-worker-1">0</strong></span>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary);">Assigned Partitions:</span>
+                                <div class="consumer-assignments" id="assign-worker-1">
+                                    <span class="assignment-badge">Waiting...</span>
+                                </div>
+                            </div>
+                            <div class="consumer-msg" id="msg-worker-1">Idle</div>
+                        </div>
+
+                        <!-- Worker 2 -->
+                        <div id="worker-card-worker-2" class="consumer-card active">
+                            <div class="consumer-header">
+                                <span class="consumer-name">
+                                    <span class="status-dot"></span> Worker-2
+                                </span>
+                                <label class="switch">
+                                    <input type="checkbox" id="toggle-worker-2" checked onchange="toggleWorker('worker-2')">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="consumer-meta">
+                                <span>Status: <strong class="worker-status" id="status-worker-2" style="color: var(--consumer-green)">RUNNING</strong></span>
+                                <span>Processed: <strong id="count-worker-2">0</strong></span>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary);">Assigned Partitions:</span>
+                                <div class="consumer-assignments" id="assign-worker-2">
+                                    <span class="assignment-badge">Waiting...</span>
+                                </div>
+                            </div>
+                            <div class="consumer-msg" id="msg-worker-2">Idle</div>
+                        </div>
+
+                        <!-- Worker 3 -->
+                        <div id="worker-card-worker-3" class="consumer-card active">
+                            <div class="consumer-header">
+                                <span class="consumer-name">
+                                    <span class="status-dot"></span> Worker-3
+                                </span>
+                                <label class="switch">
+                                    <input type="checkbox" id="toggle-worker-3" checked onchange="toggleWorker('worker-3')">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="consumer-meta">
+                                <span>Status: <strong class="worker-status" id="status-worker-3" style="color: var(--consumer-green)">RUNNING</strong></span>
+                                <span>Processed: <strong id="count-worker-3">0</strong></span>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary);">Assigned Partitions:</span>
+                                <div class="consumer-assignments" id="assign-worker-3">
+                                    <span class="assignment-badge">Waiting...</span>
+                                </div>
+                            </div>
+                            <div class="consumer-msg" id="msg-worker-3">Idle</div>
+                        </div>
+                    </div>
+
+                    <!-- Processing Delay Slider -->
+                    <div class="delay-control">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                            <span>Artificial Worker Delay</span>
+                            <span class="delay-value" id="delay-display">500ms</span>
+                        </div>
+                        <input type="range" id="processing-delay" min="0" max="3000" step="100" value="500" oninput="updateDelay(this.value)">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STRESS TEST SIMULATOR PANEL -->
+        <div class="panel" style="border-top: 3px solid var(--warning-amber);">
+            <div class="panel-header">
+                <div class="panel-title">🚀 High-Load & Throttling Stress Simulator (Shock Absorption)</div>
+                <span class="panel-badge" style="background: rgba(245, 158, 11, 0.1); color: var(--warning-amber);">Load Leveling Contrast</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 0.5rem;">
+                <!-- Column 1: Direct API -->
+                <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid var(--panel-border); border-radius: 10px; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h4 style="color: var(--danger-rose); font-size: 1rem;">🔴 Synchronous API (No Queue)</h4>
+                        <span style="font-size: 0.75rem; background: rgba(244, 63, 94, 0.1); color: var(--danger-rose); border: 1px solid rgba(244, 63, 94, 0.2); padding: 0.1rem 0.4rem; border-radius: 4px;">Direct DB Writes</span>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+                        Requests hit the server and directly acquire database connections. With a <strong>max pool limit of 50 connections</strong>, concurrent spikes immediately trigger <strong>exhaustion failures (HTTP 500 Errors)</strong>, dropped transactions, and service degradation.
+                    </p>
+                    <div style="display: flex; gap: 0.5rem; margin-top: auto; padding-top: 0.5rem;">
+                        <button class="console-btn" onclick="startDirectSimulation(1000)" style="flex: 1; border-color: var(--danger-rose); color: #fda4af; padding: 0.65rem; font-weight: 500;">
+                            💥 Spike Load (1,000 requests)
+                        </button>
+                        <button class="console-btn" onclick="startDirectSimulation(5000)" style="flex: 1; background: rgba(244, 63, 94, 0.12); border-color: var(--danger-rose); color: #fda4af; padding: 0.65rem; font-weight: 600;">
+                            💀 Extreme Overload (5,000 requests)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Column 2: Kafka API -->
+                <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid var(--panel-border); border-radius: 10px; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h4 style="color: var(--consumer-green); font-size: 1rem;">🟢 Asynchronous API (Kafka Decoupled)</h4>
+                        <span style="font-size: 0.75rem; background: rgba(16, 185, 129, 0.1); color: var(--consumer-green); border: 1px solid rgba(16, 185, 129, 0.2); padding: 0.1rem 0.4rem; border-radius: 4px;">Buffer Leveling</span>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+                        Requests are accepted instantly, returning <strong>HTTP 202 in 1ms</strong> while compiling batches into Kafka. Background consumers pull events at a sustainable, throttled speed. <strong>0% failures, perfect shock absorption</strong>. Note the lag pile up and melt down!
+                    </p>
+                    <div style="display: flex; gap: 0.5rem; margin-top: auto; padding-top: 0.5rem;">
+                        <button class="console-btn" onclick="startKafkaSimulation(10000)" style="flex: 1; border-color: var(--consumer-green); color: #a7f3d0; padding: 0.65rem; font-weight: 500;">
+                            🚀 High Load (10,000 events)
+                        </button>
+                        <button class="console-btn" onclick="startKafkaSimulation(50000)" style="flex: 1; background: rgba(16, 185, 129, 0.12); border-color: var(--consumer-green); color: #a7f3d0; padding: 0.65rem; font-weight: 600;">
+                            🔥 Peak Absorption (50,000 events)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Logs Panel -->
+        <div class="console-panel">
+            <div class="console-header">
+                <div class="console-title">
+                    <span class="console-dot"></span>
+                    <span>REAL-TIME STREAMING ACTIVITIES</span>
+                </div>
+                <div class="console-actions">
+                    <span class="filter-chip active" id="filter-all" onclick="setFilter('all')">All</span>
+                    <span class="filter-chip" id="filter-producer" onclick="setFilter('producer')">Producer</span>
+                    <span class="filter-chip" id="filter-workers" onclick="setFilter('workers')">Workers</span>
+                    <span class="filter-chip" id="filter-system" onclick="setFilter('system')">System</span>
+                    <button class="console-btn" onclick="clearLogs()" style="margin-left: 0.5rem;">Clear</button>
+                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem; cursor: pointer;">
+                        <input type="checkbox" id="autoscroll-chk" checked> Scroll
+                    </label>
+                </div>
+            </div>
+            <div class="console-body" id="console-stream">
+                <div class="log-line">
+                    <span class="log-time">[System]</span>
+                    <span class="log-src src-system">SYSTEM</span>
+                    <span class="log-msg">Welcome to Kafka Event Streaming Console! Starting EventStream listener...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Explainer Panels -->
+        <div class="info-panel">
+            <div class="info-box">
+                <h3>🔑 Key-Based Partitioning vs Round-Robin</h3>
+                <p>
+                    In Kafka, the way a message is routed to a partition is highly critical for application scalability and correctness.
+                </p>
+                <ul>
+                    <li><strong>Hash-Key Partitioning</strong>: Kafka hashes the Message Key and maps it to a specific partition. Messages with the <em>same key</em> always land in the <em>same partition</em>, ensuring strict ordering of event delivery for a specific entity.</li>
+                    <li><strong>Round-Robin</strong>: If no key is provided, Kafka distributes messages evenly across partitions. This achieves excellent load balancing but sacrifices ordering.</li>
+                </ul>
+            </div>
+            <div class="info-box">
+                <h3>⚖️ Consumer Groups & Live Rebalancing</h3>
+                <p>
+                    A <strong>Consumer Group</strong> is a group of consumers sharing the same Group ID that cooperatively process messages from a topic.
+                </p>
+                <ul>
+                    <li>Kafka automatically divides the topic's partitions among the group's active workers. Each partition is assigned to <em>exactly one</em> consumer in the group.</li>
+                    <li><strong>Live Rebalancing</strong>: Try toggling workers on/off! When a consumer joins or leaves, Kafka triggers a rebalance protocol, reshuffling partition assignments across the remaining active consumers so that no message is missed.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentFilter = 'all';
+        let totalSent = 0;
+        let totalReceived = 0;
+        let rebalanceCount = 0;
+        const recentMessages = { 0: [], 1: [], 2: [] };
+        let activeAssignments = {};
+
+        // Preset Payload Generators
+        const presets = {
+            order: () => ({
+                order_id: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
+                user_id: Math.floor(1000 + Math.random() * 9000),
+                amount: parseFloat((Math.random() * 500 + 10).toFixed(2)),
+                currency: "USD",
+                status: "PLACED",
+                items_count: Math.floor(Math.random() * 5) + 1
+            }),
+            pay: () => ({
+                transaction_id: `TXN-${Math.floor(1000000 + Math.random() * 9000000)}`,
+                order_id: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
+                gateway: Math.random() > 0.5 ? "Stripe" : "PayPal",
+                status: Math.random() > 0.15 ? "SUCCESS" : "DECLINED",
+                timestamp: new Date().toISOString()
+            }),
+            user: () => ({
+                user_id: Math.floor(1000 + Math.random() * 9000),
+                event: Math.random() > 0.5 ? "user_login" : "profile_updated",
+                ip_address: `192.168.1.${Math.floor(Math.random() * 254) + 1}`,
+                device: Math.random() > 0.5 ? "Mobile-iOS" : "Desktop-Chrome"
+            })
+        };
+
+        function applyPreset(name) {
+            if (presets[name]) {
+                document.getElementById('message-payload').value = JSON.stringify(presets[name](), null, 2);
+                if (name === 'order') {
+                    const r = presets[name]();
+                    document.getElementById('message-key').value = r.order_id;
+                } else if (name === 'pay') {
+                    document.getElementById('message-key').value = `order-usr-${Math.floor(Math.random() * 100)}`;
+                } else {
+                    document.getElementById('message-key').value = `user-${Math.floor(Math.random() * 100)}`;
+                }
+            }
+        }
+
+        // Initialize preset order payload
+        applyPreset('order');
+
+        // Dynamic select layout toggle
+        document.getElementById('partition-strategy').addEventListener('change', function(e) {
+            const partitionGroup = document.getElementById('partition-select-group');
+            if (e.target.value === 'partition') {
+                partitionGroup.style.display = 'flex';
+            } else {
+                partitionGroup.style.display = 'none';
+            }
+        });
+
+        // Publish event to Go server
+        function publishMessage() {
+            const strategy = document.getElementById('partition-strategy').value;
+            const key = document.getElementById('message-key').value;
+            const payload = document.getElementById('message-payload').value;
+            const partition = parseInt(document.getElementById('direct-partition').value) || 0;
+
+            try {
+                JSON.parse(payload); // validate json locally first
+            } catch(e) {
+                alert("Invalid JSON Payload format!");
+                return;
+            }
+
+            // Trigger animation on dispatcher button
+            const btn = document.querySelector('.dispatch-btn');
+            btn.style.transform = 'scale(0.98)';
+            setTimeout(() => btn.style.transform = '', 150);
+
+            fetch('/api/produce', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    key: key,
+                    value: payload,
+                    strategy: strategy,
+                    partition: partition
+                })
+            })
+            .then(res => {
+                if (!res.ok) {
+                    return res.text().then(text => { throw new Error(text) });
+                }
+                return res.json();
+            })
+            .then(data => {
+                totalSent++;
+                document.getElementById('stat-produced').innerText = totalSent;
+                
+                // Visual spark effect from producer panel
+                triggerSparkAnimation();
+            })
+            .catch(err => {
+                appendLog('producer', 'ERROR', `Failed to publish message: ${err.message}`);
+            });
+        }
+
+        // Trigger Direct Synchronous API Overload simulation
+        function startDirectSimulation(count) {
+            appendLog('system', 'WARN', `Triggering ${count} Direct Synchronous API calls...`);
+            fetch(`/api/simulate/direct?count=${count}`, { method: 'POST' })
+            .catch(err => appendLog('system', 'ERROR', `Direct simulation failed: ${err}`));
+        }
+
+        // Trigger Kafka Asynchronous Buffer Ingest simulation
+        function startKafkaSimulation(count) {
+            appendLog('system', 'WARN', `Triggering ${count} Kafka Buffer Ingests...`);
+            fetch(`/api/simulate/kafka?count=${count}`, { method: 'POST' })
+            .then(() => {
+                // If they ingest a lot, reduce worker delay so it empties quickly and cleanly
+                if (count >= 50000) {
+                    // Update slider visually to 0 or 100ms
+                    document.getElementById('processing-delay').value = 100;
+                    updateDelay(100);
+                }
+            })
+            .catch(err => appendLog('system', 'ERROR', `Kafka simulation failed: ${err}`));
+        }
+
+        // Spark / glow path animation simulation
+        function triggerSparkAnimation() {
+            const strategy = document.getElementById('partition-strategy').value;
+            const directPartitionVal = parseInt(document.getElementById('direct-partition').value) || 0;
+            
+            let targetPartition = 0;
+            if (strategy === 'partition') {
+                targetPartition = directPartitionVal;
+            } else if (strategy === 'key') {
+                const key = document.getElementById('message-key').value || '';
+                let hash = 0;
+                for (let i = 0; i < key.length; i++) {
+                    hash = key.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                targetPartition = Math.abs(hash) % 3;
+            } else {
+                targetPartition = Math.floor(Math.random() * 3);
+            }
+
+            const pathId = `path-prod-p${targetPartition}`;
+            const pathEl = document.getElementById(pathId);
+            if (!pathEl) return;
+
+            const svg = document.getElementById('svg-container');
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('r', '5');
+            circle.setAttribute('class', 'glow-dot');
+            
+            const anim = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
+            anim.setAttribute('dur', '0.6s');
+            anim.setAttribute('repeatCount', '1');
+            anim.setAttribute('fill', 'freeze');
+            anim.setAttribute('path', pathEl.getAttribute('d'));
+            
+            circle.appendChild(anim);
+            svg.appendChild(circle);
+
+            setTimeout(() => {
+                const partCard = document.getElementById(`partition-card-${targetPartition}`);
+                if (partCard) {
+                    partCard.classList.add('active');
+                    setTimeout(() => partCard.classList.remove('active'), 300);
+                }
+                circle.remove();
+            }, 600);
+        }
+
+        function triggerWorkerSpark(partition, workerId) {
+            const pathId = `path-p${partition}-w`;
+            const pathEl = document.getElementById(pathId);
+            if (!pathEl) return;
+
+            const svg = document.getElementById('svg-container');
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('r', '5');
+            circle.setAttribute('class', 'glow-dot worker-glow');
+            
+            const anim = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
+            anim.setAttribute('dur', '0.6s');
+            anim.setAttribute('repeatCount', '1');
+            anim.setAttribute('fill', 'freeze');
+            anim.setAttribute('path', pathEl.getAttribute('d'));
+            
+            circle.appendChild(anim);
+            svg.appendChild(circle);
+
+            setTimeout(() => {
+                const workerCard = document.getElementById(`worker-card-${workerId}`);
+                if (workerCard) {
+                    workerCard.style.boxShadow = '0 0 20px var(--glow-green)';
+                    setTimeout(() => workerCard.style.boxShadow = '', 400);
+                }
+                circle.remove();
+            }, 600);
+        }
+
+        // Toggle worker state (Start/Stop)
+        function toggleWorker(workerId) {
+            const checkbox = document.getElementById(`toggle-worker-${workerId}`);
+            const action = checkbox.checked ? 'start' : 'stop';
+            
+            const card = document.getElementById(`worker-card-${workerId}`);
+            card.style.opacity = '0.7';
+
+            fetch(`/api/worker/toggle?id=${workerId}&action=${action}`, {
+                method: 'POST'
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("API call failed");
+                return res.json();
+            })
+            .then(data => {
+                updateSystemState();
+            })
+            .catch(err => {
+                appendLog('system', 'ERROR', `Failed to toggle worker ${workerId}: ${err.message}`);
+                checkbox.checked = !checkbox.checked; // revert
+                card.style.opacity = '';
+            });
+        }
+
+        // Update processing delay
+        function updateDelay(val) {
+            document.getElementById('delay-display').innerText = `${val}ms`;
+            fetch(`/api/delay?delay=${val}`, { method: 'POST' })
+            .catch(err => appendLog('system', 'ERROR', `Failed to update delay: ${err}`));
+        }
+
+        // Logs Terminal Handling
+        function appendLog(source, level, message) {
+            const stream = document.getElementById('console-stream');
+            
+            const line = document.createElement('div');
+            line.className = `log-line log-level-${level} sse-src-${source}`;
+            if (currentFilter !== 'all' && getFilterGroup(source) !== currentFilter) {
+                line.style.display = 'none';
+            }
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'log-time';
+            timeSpan.innerText = `[${new Date().toLocaleTimeString()}]`;
+
+            const srcSpan = document.createElement('span');
+            srcSpan.className = `log-src src-${source}`;
+            srcSpan.innerText = source.toUpperCase();
+
+            const msgSpan = document.createElement('span');
+            msgSpan.className = 'log-msg';
+            msgSpan.innerText = message;
+
+            line.appendChild(timeSpan);
+            line.appendChild(srcSpan);
+            line.appendChild(msgSpan);
+            stream.appendChild(line);
+
+            while (stream.children.length > 100) {
+                stream.removeChild(stream.firstChild);
+            }
+
+            if (document.getElementById('autoscroll-chk').checked) {
+                stream.scrollTop = stream.scrollHeight;
+            }
+        }
+
+        function getFilterGroup(source) {
+            if (source === 'producer') return 'producer';
+            if (source === 'system') return 'system';
+            if (source.startsWith('worker')) return 'workers';
+            return 'all';
+        }
+
+        function setFilter(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            document.getElementById(`filter-${filter}`).classList.add('active');
+
+            const stream = document.getElementById('console-stream');
+            Array.from(stream.children).forEach(line => {
+                if (filter === 'all') {
+                    line.style.display = 'flex';
+                } else {
+                    const isMatched = Array.from(line.classList).some(cls => {
+                        if (filter === 'producer' && cls === 'sse-src-producer') return true;
+                        if (filter === 'system' && cls === 'sse-src-system') return true;
+                        if (filter === 'workers' && cls.startsWith('sse-src-worker')) return true;
+                        return false;
+                    });
+                    line.style.display = isMatched ? 'flex' : 'none';
+                }
+            });
+        }
+
+        function clearLogs() {
+            const stream = document.getElementById('console-stream');
+            stream.innerHTML = '';
+        }
+
+        // SVG Connectors Redrawing
+        function updateConnectors() {
+            const hub = document.getElementById('producer-hub-el');
+            const topic = document.getElementById('kafka-topic-el');
+            const group = document.getElementById('consumer-group-el');
+            if (!hub || !topic || !group) return;
+
+            const dispatchBtn = document.querySelector('.dispatch-btn');
+            
+            for (let i = 0; i < 3; i++) {
+                const partCard = document.getElementById(`partition-card-${i}`);
+                const path = document.getElementById(`path-prod-p${i}`);
+                if (dispatchBtn && partCard && path) {
+                    drawCurveBetween(dispatchBtn, partCard, path, true);
+                }
+            }
+
+            for (let i = 0; i < 3; i++) {
+                const partCard = document.getElementById(`partition-card-${i}`);
+                const path = document.getElementById(`path-p${i}-w`);
+                if (!partCard || !path) continue;
+
+                const assignedWorkerId = activeAssignments[i];
+                if (assignedWorkerId) {
+                    const workerCard = document.getElementById(`worker-card-${assignedWorkerId}`);
+                    if (workerCard && workerCard.classList.contains('active')) {
+                        path.className.baseVal = "connection-line active-route";
+                        drawCurveBetween(partCard, workerCard, path, false);
+                        continue;
+                    }
+                }
+                
+                path.className.baseVal = "connection-line active-group";
+                let firstActiveWorker = null;
+                for (let w = 1; w <= 3; w++) {
+                    const card = document.getElementById(`worker-card-worker-${w}`);
+                    if (card && card.classList.contains('active')) {
+                        firstActiveWorker = card;
+                        break;
+                    }
+                }
+                
+                const targetEl = firstActiveWorker || group;
+                drawCurveBetween(partCard, targetEl, path, false);
+            }
+        }
+
+        function drawCurveBetween(fromEl, toEl, pathEl, rightToLeft) {
+            const fromRect = fromEl.getBoundingClientRect();
+            const toRect = toEl.getBoundingClientRect();
+            const containerRect = document.getElementById('svg-container').getBoundingClientRect();
+
+            const x1 = fromRect.right - containerRect.left;
+            const y1 = fromRect.top + fromRect.height / 2 - containerRect.top;
+
+            const x2 = toRect.left - containerRect.left;
+            const y2 = toRect.top + toRect.height / 2 - containerRect.top;
+
+            const controlOffset = Math.abs(x2 - x1) * 0.4;
+            const cx1 = x1 + controlOffset;
+            const cy1 = y1;
+            const cx2 = x2 - controlOffset;
+            const cy2 = y2;
+
+            const pathData = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+            pathEl.setAttribute('d', pathData);
+        }
+
+        // Query the state from server and update UI elements
+        function updateSystemState() {
+            fetch('/api/state')
+            .then(res => res.json())
+            .then(state => {
+                document.getElementById('broker-address').innerText = `Broker: ${state.broker}`;
+                
+                totalSent = state.total_produced;
+                totalReceived = state.total_consumed;
+                rebalanceCount = state.rebalance_count;
+                
+                document.getElementById('stat-produced').innerText = totalSent.toLocaleString();
+                document.getElementById('stat-consumed').innerText = totalReceived.toLocaleString();
+                document.getElementById('stat-rebalances').innerText = rebalanceCount;
+
+                // Compute Active Lag: Produced - Consumed
+                const lag = Math.max(0, totalSent - totalReceived);
+                const lagValEl = document.getElementById('stat-lag');
+                const lagCardEl = document.getElementById('lag-card');
+                
+                lagValEl.innerText = lag.toLocaleString();
+                if (lag > 0) {
+                    lagCardEl.classList.add('danger-pulse');
+                    lagValEl.style.color = 'var(--danger-rose)';
+                } else {
+                    lagCardEl.classList.remove('danger-pulse');
+                    lagValEl.style.color = 'var(--warning-amber)';
+                }
+
+                document.getElementById('processing-delay').value = state.worker_delay;
+                document.getElementById('delay-display').innerText = `${state.worker_delay}ms`;
+
+                if (state.partitions) {
+                    state.partitions.forEach(p => {
+                        const offsetEl = document.getElementById(`offset-p${p.id}`);
+                        if (offsetEl) offsetEl.innerText = `Offset: ${p.end_offset.toLocaleString()}`;
+                    });
+                }
+
+                activeAssignments = state.assignments || {};
+                
+                for (let i = 1; i <= 3; i++) {
+                    const workerId = `worker-${i}`;
+                    const workerData = state.workers.find(w => w.id === workerId);
+                    const card = document.getElementById(`worker-card-${workerId}`);
+                    const checkbox = document.getElementById(`toggle-worker-${workerId}`);
+                    const statusEl = document.getElementById(`status-${workerId}`);
+                    const countEl = document.getElementById(`count-${workerId}`);
+                    const assignmentsContainer = document.getElementById(`assign-${workerId}`);
+                    const msgContainer = document.getElementById(`msg-${workerId}`);
+
+                    if (workerData && card) {
+                        card.style.opacity = '';
+                        
+                        if (workerData.is_running) {
+                            card.className = "consumer-card active";
+                            checkbox.checked = true;
+                            statusEl.innerText = "RUNNING";
+                            statusEl.style.color = "var(--consumer-green)";
+                        } else {
+                            card.className = "consumer-card inactive";
+                            checkbox.checked = false;
+                            statusEl.innerText = "STOPPED";
+                            statusEl.style.color = "var(--danger-rose)";
+                        }
+
+                        countEl.innerText = workerData.processed_count.toLocaleString();
+                        
+                        if (workerData.current_msg) {
+                            msgContainer.innerText = workerData.current_msg;
+                            msgContainer.style.borderLeftColor = "var(--warning-amber)";
+                        } else {
+                            msgContainer.innerText = "Idle";
+                            msgContainer.style.borderLeftColor = "var(--consumer-green)";
+                        }
+
+                        assignmentsContainer.innerHTML = '';
+                        let assignedCount = 0;
+                        for (let pId in activeAssignments) {
+                            if (activeAssignments[pId] === workerId) {
+                                assignedCount++;
+                                const badge = document.createElement('span');
+                                badge.className = 'assignment-badge';
+                                badge.innerText = `Partition #${pId}`;
+                                assignmentsContainer.appendChild(badge);
+                            }
+                        }
+                        if (assignedCount === 0) {
+                            const badge = document.createElement('span');
+                            badge.className = 'assignment-badge';
+                            badge.style.background = 'rgba(255,255,255,0.04)';
+                            badge.style.border = '1px dashed var(--panel-border)';
+                            badge.style.color = 'var(--text-secondary)';
+                            badge.innerText = workerData.is_running ? 'Awaiting assignment...' : 'None';
+                            assignmentsContainer.appendChild(badge);
+                        }
+                    }
+                }
+
+                updateConnectors();
+            })
+            .catch(err => console.error("Error updating system state: ", err));
+        }
+
+        // Establish SSE connection to stream events
+        function initEventStream() {
+            const streamUrl = `/api/logs`;
+            const source = new EventSource(streamUrl);
+
+            source.addEventListener('log', function(e) {
+                const event = JSON.parse(e.data);
+                appendLog(event.source, event.level, event.message);
+
+                if (event.source.startsWith('worker') && event.message.includes('Received from Partition')) {
+                    const partMatch = event.message.match(/Partition #(\d+)/);
+                    if (partMatch) {
+                        const partition = parseInt(partMatch[1]);
+                        triggerWorkerSpark(partition, event.source);
+                        
+                        const cleanMsg = event.message.split('|')[1]?.trim() || '';
+                        addPartitionMsg(partition, cleanMsg);
+                    }
+                }
+
+                if (event.message.includes('consumer group') || event.message.includes('rebalance') || event.message.includes('stopped')) {
+                    setTimeout(updateSystemState, 800);
+                }
+            });
+
+            source.onopen = function() {
+                appendLog('system', 'INFO', 'Connected to Go Real-time SSE streaming backend successfully.');
+                updateSystemState();
+            };
+
+            source.onerror = function() {
+                appendLog('system', 'ERROR', 'Disconnected from real-time log stream. Re-establishing connection...');
+            };
+        }
+
+        function addPartitionMsg(partition, messageText) {
+            const container = document.getElementById(`msgs-p${partition}`);
+            if (!container) return;
+
+            if (recentMessages[partition].length === 0) {
+                container.innerHTML = '';
+            }
+
+            recentMessages[partition].unshift(messageText);
+            if (recentMessages[partition].length > 3) {
+                recentMessages[partition].pop();
+            }
+
+            container.innerHTML = '';
+            recentMessages[partition].forEach(msg => {
+                const pill = document.createElement('div');
+                pill.className = 'message-pill';
+                pill.innerText = msg;
+                container.appendChild(pill);
+            });
+        }
+
+        window.addEventListener('resize', updateConnectors);
+        
+        // Dynamic polling to keep offsets, counts and lag updated in real-time
+        setInterval(updateSystemState, 1500);
+
+        initEventStream();
+    </script>
+</body>
+</html>
