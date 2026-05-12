@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    # Enable pg_stat_statements which is required by PMM for query monitoring
+    command: postgres -c shared_preload_libraries=pg_stat_statements -c track_activity_query_size=2048 -c pg_stat_statements.track=all
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
+  pgbouncer:
+    image: edoburu/pgbouncer
+    environment:
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_HOST=db
+      - DB_NAME=postgres
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=1000
+      - DEFAULT_POOL_SIZE=20
+      - AUTH_TYPE=scram-sha-256
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits
+    ports:
+      - "6432:5432"
+    depends_on:
+      - db
+
+  pmm-server:
+    image: percona/pmm-server:2
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - pmm-data:/srv
+    restart: always
+
+volumes:
+  pmm-data:
+  pg-data:
