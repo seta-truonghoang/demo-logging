@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: golang-app-deployment
+  namespace: default
+  labels:
+    app: golang-app
+spec:
+  # Start with 3 replicas for High Availability and Load Balancing
+  replicas: 3
+  selector:
+    matchLabels:
+      app: golang-app
+  # Rolling Update strategy ensures zero downtime during code updates
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Spin up 1 new Pod before killing old ones
+      maxUnavailable: 0  # Maintain 100% capacity during the update
+  template:
+    metadata:
+      labels:
+        app: golang-app
+    spec:
+      containers:
+      - name: golang-app-container
+        # Reference the optimized Go image we built in the previous task
+        image: go-docker-demo:latest
+        imagePullPolicy: IfNotPresent # Pull only if not present locally (excellent for local cluster dev)
+        ports:
+        - containerPort: 8080
+        # Inject environment variables from ConfigMap
+        env:
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: PORT
+        - name: CUSTOM_MESSAGE
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: CUSTOM_MESSAGE
+        # Resource requests & limits for CPU and Memory scheduling
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "100m"
+          limits:
+            memory: "64Mi"
+            cpu: "250m"
+        # Readiness probe tells Kubernetes when the Pod is ready to receive web traffic
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        # Liveness probe tells Kubernetes when the Pod is unhealthy and needs to be restarted
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
