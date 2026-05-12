@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  golang-app:
+    build:
+      context: ./golang
+      dockerfile: Dockerfile
+    container_name: demo-golang-service
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+    restart: unless-stopped
+    # Resource limits (Production Best Practice)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 128M
+        reservations:
+          memory: 32M
+
+  nodejs-app:
+    build:
+      context: ./nodejs
+      dockerfile: Dockerfile
+    container_name: demo-nodejs-service
+    ports:
+      - "8081:8081"
+    environment:
+      - PORT=8081
+      - NODE_ENV=production
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          memory: 64M
+
+  java-app:
+    build:
+      context: ./java
+      dockerfile: Dockerfile
+    container_name: demo-java-service
+    ports:
+      - "8082:8082"
+    environment:
+      - PORT=8082
+      - JAVA_OPTS=-XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -Xms64m -Xmx128m
+    restart: unless-stopped
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          memory: 128M
