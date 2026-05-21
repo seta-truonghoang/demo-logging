@@ -51,7 +51,7 @@ services:
 
   saga-order:
     build:
-      context: ./microservice-saga
+      context: ./microservice-saga-choreography
       dockerfile: order-service/Dockerfile
     environment:
       DATABASE_URL: "host=postgres user=demo password=demo dbname=demo port=5432 sslmode=disable TimeZone=UTC"
@@ -62,11 +62,11 @@ services:
     depends_on:
       - postgres
       - kafka
-    profiles: ["saga"]
+    profiles: ["saga-choreography"]
 
   saga-payment:
     build:
-      context: ./microservice-saga
+      context: ./microservice-saga-choreography
       dockerfile: payment-service/Dockerfile
     environment:
       DATABASE_URL: "host=postgres user=demo password=demo dbname=demo port=5432 sslmode=disable TimeZone=UTC"
@@ -77,7 +77,7 @@ services:
     depends_on:
       - postgres
       - kafka
-    profiles: ["saga"]
+    profiles: ["saga-choreography"]
 
   twopc-order:
     build:
@@ -119,6 +119,47 @@ services:
       - twopc-order
       - twopc-payment
     profiles: ["2pc"]
+
+  saga-orch-order:
+    build:
+      context: ./microservice-saga-orchestration
+      dockerfile: order-service/Dockerfile
+    environment:
+      DATABASE_URL: "host=postgres user=demo password=demo dbname=demo port=5432 sslmode=disable TimeZone=UTC"
+      PORT: "8086"
+    ports:
+      - "8086:8086"
+    depends_on:
+      - postgres
+    profiles: ["saga-orchestration"]
+
+  saga-orch-payment:
+    build:
+      context: ./microservice-saga-orchestration
+      dockerfile: payment-service/Dockerfile
+    environment:
+      DATABASE_URL: "host=postgres user=demo password=demo dbname=demo port=5432 sslmode=disable TimeZone=UTC"
+      PORT: "8087"
+    ports:
+      - "8087:8087"
+    depends_on:
+      - postgres
+    profiles: ["saga-orchestration"]
+
+  saga-orch-coordinator:
+    build:
+      context: ./microservice-saga-orchestration
+      dockerfile: orchestrator/Dockerfile
+    environment:
+      ORDER_SERVICE_URL: "http://saga-orch-order:8086"
+      PAYMENT_SERVICE_URL: "http://saga-orch-payment:8087"
+      PORT: "8088"
+    ports:
+      - "8088:8088"
+    depends_on:
+      - saga-orch-order
+      - saga-orch-payment
+    profiles: ["saga-orchestration"]
 
 volumes:
   pgdata:
