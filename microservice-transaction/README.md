@@ -75,4 +75,4 @@ To stop the services and remove containers (including the shared infrastructure)
 docker-compose down
 ```
 
-To view the database directly, you can access PgAdmin on `http://localhost:8080` (when the monolithic app is not using it, or you may need to map a different port for pgadmin in the docker-compose). Kafka messages can be viewed via Kafdrop at `http://localhost:9000`.
+To view the database directly, you can connect to the PostgreSQL instance running on `localhost:5432` with user `demo` and password `demo`. Kafka messages can be viewed via Kafdrop at `http://localhost:9000`.
