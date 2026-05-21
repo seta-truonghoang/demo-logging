@@ -1,0 +1,138 @@
+version: '3.8'
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper:3.4.6
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: wurstmeister/kafka:2.13-2.8.0
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_LISTENERS: INSIDE://:9093,OUTSIDE://:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: OUTSIDE://localhost:9092,INSIDE://kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop:latest
+    environment:
+      KAFKA_BROKERCONNECT: kafka:9093
+    ports:
+      - "9000:9000"
+    depends_on:
+      - kafka
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: demo
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4:7
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+
+  monolithic-app:
+    build:
+      context: ./monlithic-transaction
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: "host=postgres user=demo password=demo dbname=demo port=5432 sslmode=disable TimeZone=UTC"
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    profiles: ["monolithic"]
+
+  saga-order:
+    build:
+      context: ./microservice-saga
+      dockerfile: order-service/Dockerfile
+    environment:
+      DATABASE_URL: "host=postgres user=demo password=demo dbname=demo port=5432 sslmode=disable TimeZone=UTC"
+      KAFKA_BROKER: "kafka:9093"
+      PORT: "8081"
+    ports:
+      - "8081:8081"
+    depends_on:
+      - postgres
+      - kafka
+    profiles: ["saga"]
+
+  saga-payment:
+    build:
+      context: ./microservice-saga
+      dockerfile: payment-service/Dockerfile
+    environment:
+      DATABASE_URL: "host=postgres user=demo password=demo dbname=demo port=5432 sslmode=disable TimeZone=UTC"
+      KAFKA_BROKER: "kafka:9093"
+      PORT: "8082"
+    ports:
+      - "8082:8082"
+    depends_on:
+      - postgres
+      - kafka
+    profiles: ["saga"]
+
+  twopc-order:
+    build:
+      context: ./microservice-2pc
+      dockerfile: order-service/Dockerfile
+    environment:
+      DATABASE_URL: "host=postgres user=demo password=demo dbname=demo port=5432 sslmode=disable TimeZone=UTC"
+      PORT: "8083"
+    ports:
+      - "8083:8083"
+    depends_on:
+      - postgres
+    profiles: ["2pc"]
+
+  twopc-payment:
+    build:
+      context: ./microservice-2pc
+      dockerfile: payment-service/Dockerfile
+    environment:
+      DATABASE_URL: "host=postgres user=demo password=demo dbname=demo port=5432 sslmode=disable TimeZone=UTC"
+      PORT: "8084"
+    ports:
+      - "8084:8084"
+    depends_on:
+      - postgres
+    profiles: ["2pc"]
+
+  twopc-coordinator:
+    build:
+      context: ./microservice-2pc
+      dockerfile: coordinator/Dockerfile
+    environment:
+      ORDER_SERVICE_URL: "http://twopc-order:8083"
+      PAYMENT_SERVICE_URL: "http://twopc-payment:8084"
+      PORT: "8085"
+    ports:
+      - "8085:8085"
+    depends_on:
+      - twopc-order
+      - twopc-payment
+    profiles: ["2pc"]
+
+volumes:
+  pgdata:

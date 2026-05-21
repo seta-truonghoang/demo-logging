@@ -44,7 +44,7 @@ RUN chown -R node:node /usr/src/app
 USER node
 
 # Expose port
-EXPOSE 8081
+EXPOSE 8080
 
 # Use tini as the entrypoint and start the application via node
 ENTRYPOINT ["/sbin/tini", "--"]

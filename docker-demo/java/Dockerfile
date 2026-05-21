@@ -45,7 +45,7 @@ ENV PORT=8082 \
     JAVA_OPTS="-XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
 
 # Expose port
-EXPOSE 8082
+EXPOSE 8080
 
 # Run the Java application
 # We use 'exec' to ensure JVM receives OS shutdown signals directly as PID 1

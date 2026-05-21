@@ -76,8 +76,8 @@ services:
     image: grafana/tempo:2.3.0
     container_name: tempo
     ports:
-      - "3200:3200"   # Tempo HTTP API
-      - "4318:4318"   # OTLP HTTP (for debugging)
+      - "3200:3200" # Tempo HTTP API
+      - "4318:4318" # OTLP HTTP (for debugging)
     volumes:
       - ./configs/tempo.yml:/etc/tempo/tempo.yml
     command:
@@ -89,7 +89,7 @@ services:
     image: otel/opentelemetry-collector-contrib:0.88.0
     container_name: otel-collector
     ports:
-      - "4317:4317"   # OTLP gRPC
+      - "4317:4317" # OTLP gRPC
     volumes:
       - ./configs/otel-collector.yml:/etc/otelcol-contrib/config.yaml
     depends_on:
@@ -101,7 +101,7 @@ services:
     image: grafana/grafana:10.2.0
     container_name: grafana
     ports:
-      - "3000:3000"
+      - "80:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
